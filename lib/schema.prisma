@@ -1,0 +1,216 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("POSTGRES_PRISMA_URL") // Usa la URL de Vercel Postgres
+  directUrl = env("POSTGRES_URL_NON_POOLING") // Usa la URL sin pooling para migraciones
+}
+
+model Usuario {
+  id            String    @id @default(cuid())
+  nombre        String
+  email         String    @unique
+  password      String
+  rol           String    // "admin", "tecnico", "vendedor", "cliente"
+  fechaCreacion DateTime  @default(now())
+  activo        Boolean   @default(true)
+  
+  // Relaciones
+  serviciosAsignados Servicio[] @relation("TecnicoServicio")
+  cotizacionesCreadas Cotizacion[] @relation("UsuarioCotizacion")
+  serviciosCreados Servicio[] @relation("UsuarioServicio")
+  historialServicio HistorialServicio[] @relation("UsuarioHistorial")
+}
+
+model Cliente {
+  id            String   @id @default(cuid())
+  nombre        String
+  tipoDocumento String   // "NIT", "CC", "CE", etc.
+  documento     String   @unique
+  telefono      String?
+  email         String?
+  direccion     String?
+  ciudad        String?
+  departamento  String?
+  fechaRegistro DateTime @default(now())
+  activo        Boolean  @default(true)
+  
+  // Relaciones
+  contactos     ContactoCliente[]
+  cotizaciones  Cotizacion[]
+  servicios     Servicio[]
+}
+
+model ContactoCliente {
+  id        String  @id @default(cuid())
+  nombre    String
+  cargo     String?
+  telefono  String?
+  email     String?
+  principal Boolean @default(false)
+  
+  // Relaciones
+  cliente   Cliente @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+  clienteId String
+}
+
+model Cotizacion {
+  id          String   @id @default(cuid())
+  numero      String   @unique // Formato: COT-2023-001
+  fecha       DateTime @default(now())
+  validoHasta DateTime?
+  subtotal    Float
+  impuestos   Float
+  total       Float
+  estado      String   // "pendiente", "enviada", "aceptada", "rechazada"
+  notas       String?
+  
+  // Relaciones
+  cliente     Cliente  @relation(fields: [clienteId], references: [id])
+  clienteId   String
+  items       ItemCotizacion[]
+  imagenes    ImagenCotizacion[]
+  servicios   Servicio[]
+  creadoPor   Usuario  @relation("UsuarioCotizacion", fields: [usuarioId], references: [id])
+  usuarioId   String
+}
+
+model ItemCotizacion {
+  id             String     @id @default(cuid())
+  descripcion    String
+  cantidad       Int
+  precioUnitario Float
+  subtotal       Float
+  impuesto       Float      @default(0)
+  
+  // Relaciones
+  cotizacion     Cotizacion @relation(fields: [cotizacionId], references: [id], onDelete: Cascade)
+  cotizacionId   String
+}
+
+model ImagenCotizacion {
+  id           String     @id @default(cuid())
+  url          String
+  descripcion  String?
+  fecha        DateTime   @default(now())
+  
+  // Relaciones
+  cotizacion   Cotizacion @relation(fields: [cotizacionId], references: [id], onDelete: Cascade)
+  cotizacionId String
+}
+
+model Servicio {
+  id              String    @id @default(cuid())
+  numero          String    @unique // Formato: SRV-2023-001
+  tipo            String    // "instalacion", "mantenimiento", "reparacion", "consultoria"
+  categoria       String    // "cctv", "redes", "servidores", "seguridad"
+  descripcion     String
+  ubicacion       String?
+  fechaInicio     DateTime?
+  fechaFinEstimada DateTime?
+  fechaFinReal    DateTime?
+  prioridad       String    // "baja", "media", "alta", "urgente"
+  estado          String    // "pendiente", "programado", "en_progreso", "completado", "cancelado"
+  progreso        Int       @default(0)
+  notas           String?
+  
+  // Relaciones
+  cliente         Cliente   @relation(fields: [clienteId], references: [id])
+  clienteId       String
+  cotizacion      Cotizacion? @relation(fields: [cotizacionId], references: [id])
+  cotizacionId    String?
+  tecnico         Usuario?  @relation("TecnicoServicio", fields: [tecnicoId], references: [id])
+  tecnicoId       String?
+  creadoPor       Usuario   @relation("UsuarioServicio", fields: [usuarioId], references: [id])
+  usuarioId       String
+  equipos         EquipoServicio[]
+  actividades     ActividadServicio[]
+  imagenes        ImagenServicio[]
+  documentos      DocumentoServicio[]
+  historial       HistorialServicio[]
+}
+
+model EquipoServicio {
+  id          String   @id @default(cuid())
+  tipo        String
+  marca       String?
+  modelo      String?
+  cantidad    Int
+  numeroSerie String?
+  estado      String   // "pendiente", "instalado", "configurado", "en_prueba", "operativo"
+  
+  // Relaciones
+  servicio    Servicio @relation(fields: [servicioId], references: [id], onDelete: Cascade)
+  servicioId  String
+}
+
+model ActividadServicio {
+  id              String    @id @default(cuid())
+  descripcion     String
+  fechaProgramada DateTime
+  fechaRealizada  DateTime?
+  estado          String    // "pendiente", "en_progreso", "completado", "cancelado"
+  notas           String?
+  
+  // Relaciones
+  servicio        Servicio  @relation(fields: [servicioId], references: [id], onDelete: Cascade)
+  servicioId      String
+}
+
+model ImagenServicio {
+  id           String   @id @default(cuid())
+  url          String
+  descripcion  String?
+  fecha        DateTime @default(now())
+  
+  // Relaciones
+  servicio     Servicio @relation(fields: [servicioId], references: [id], onDelete: Cascade)
+  servicioId   String
+}
+
+model DocumentoServicio {
+  id           String   @id @default(cuid())
+  nombre       String
+  url          String
+  tipo         String   // "pdf", "doc", "xls", etc.
+  fecha        DateTime @default(now())
+  
+  // Relaciones
+  servicio     Servicio @relation(fields: [servicioId], references: [id], onDelete: Cascade)
+  servicioId   String
+}
+
+model HistorialServicio {
+  id          String   @id @default(cuid())
+  fecha       DateTime @default(now())
+  accion      String
+  detalles    String?
+  
+  // Relaciones
+  servicio    Servicio @relation(fields: [servicioId], references: [id], onDelete: Cascade)
+  servicioId  String
+  usuario     Usuario  @relation("UsuarioHistorial", fields: [usuarioId], references: [id])
+  usuarioId   String
+}
+
+model Inventario {
+  id          String   @id @default(cuid())
+  codigo      String   @unique
+  nombre      String
+  tipo        String
+  marca       String?
+  modelo      String?
+  cantidad    Int      @default(0)
+  precioCompra Float?
+  precioVenta Float?
+  fechaCompra DateTime?
+  proveedor   String?
+  ubicacion   String?
+  notas       String?
+  activo      Boolean  @default(true)
+}
